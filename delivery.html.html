@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>四季邮局 · 投递站</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;400;500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; transition: background-color 0.3s ease, color 0.2s ease; }
+        body { font-family: 'Inter', sans-serif; min-height: 100vh; padding: 2rem 1.5rem; position: relative; line-height: 1.5; }
+        body[data-theme="light"] { --bg-primary: #fefcf5; --bg-card: rgba(255,255,245,0.92); --text-primary: #1e2a2e; --border-light: #dcd7c2; --accent-soft: #9bbf8f; --shadow: 0 12px 28px rgba(0,0,0,0.05); --completion-bg: rgba(255,252,240,0.85); }
+        body[data-theme="dark"] { --bg-primary: #121212; --bg-card: rgba(30,30,35,0.92); --text-primary: #ece7e1; --border-light: #3a4235; --accent-soft: #6c9e6b; --shadow: 0 12px 28px rgba(0,0,0,0.4); --completion-bg: rgba(25,28,22,0.9); }
+        body { background-color: var(--bg-primary); color: var(--text-primary); }
+        .container { max-width: 980px; margin: 0 auto; position: relative; z-index: 5; }
+        .header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; margin-bottom: 2.5rem; border-bottom: 2px solid var(--border-light); padding-bottom: 1rem; }
+        .logo h1 { font-family: 'Cormorant Garamond', serif; font-size: 2.2rem; font-weight: 500; background: linear-gradient(135deg, var(--accent-soft), #8fbc8f); background-clip: text; -webkit-background-clip: text; color: transparent; }
+        .logo p { font-size: 0.8rem; opacity: 0.8; font-style: italic; }
+        .controls { display: flex; gap: 1rem; }
+        .season-group, .theme-group { display: flex; gap: 0.5rem; background: var(--bg-card); padding: 0.4rem 0.8rem; border-radius: 60px; border: 1px solid var(--border-light); }
+        .season-btn, .theme-btn { background: none; border: none; font-size: 1.2rem; cursor: pointer; padding: 0.4rem 0.9rem; border-radius: 40px; color: var(--text-primary); display: flex; align-items: center; gap: 6px; }
+        .season-btn.active, .theme-btn.active { background-color: var(--accent-soft); color: #1e2a1f; }
+        .apply-form, .pending-msg, .write-area { background: var(--bg-card); backdrop-filter: blur(12px); border-radius: 2rem; padding: 1.8rem 2rem; border: 1px solid var(--border-light); box-shadow: var(--shadow); margin-bottom: 2rem; }
+        .apply-form h3, .pending-msg h3 { margin-bottom: 1rem; font-size: 1.5rem; }
+        .apply-input { width: 100%; margin: 0.8rem 0; padding: 0.9rem 1rem; background: var(--bg-primary); border: 1px solid var(--border-light); border-radius: 1.2rem; font-size: 0.9rem; color: var(--text-primary); }
+        .btn-apply, .btn-send { background: var(--accent-soft); border: none; padding: 0.8rem 1.8rem; border-radius: 3rem; font-weight: 600; cursor: pointer; margin-top: 0.5rem; width: 100%; }
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+        .full-width { grid-column: span 2; }
+        input, textarea { width: 100%; padding: 0.9rem 1rem; background: var(--bg-primary); border: 1px solid var(--border-light); border-radius: 1.2rem; font-family: 'Inter', sans-serif; color: var(--text-primary); font-size: 0.9rem; outline: none; }
+        textarea { resize: vertical; min-height: 110px; }
+        .remain-count { text-align: right; font-size: 0.8rem; margin-top: 0.5rem; opacity: 0.7; }
+        .message-board { background: var(--bg-card); border-radius: 2rem; padding: 2rem; text-align: center; margin-top: 2rem; border: 1px solid var(--border-light); }
+        .message-text { font-family: 'Cormorant Garamond', serif; font-size: 1.4rem; font-style: italic; line-height: 1.5; }
+        .plant-decor { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; overflow: hidden; }
+        .floating-plant { position: absolute; animation: floatAnim 16s infinite alternate; pointer-events: none; }
+        @keyframes floatAnim { 0% { transform: translateY(0); } 100% { transform: translateY(-28px); } }
+        .corner-leaf { position: fixed; bottom: 20px; right: 15px; font-size: 3rem; opacity: 0.35; pointer-events: none; z-index: 2; }
+        .corner-leaf-left { left: 15px; right: auto; }
+        .completion-page { position: fixed; inset: 0; background: var(--completion-bg); backdrop-filter: blur(12px); display: flex; align-items: center; justify-content: center; opacity: 0; visibility: hidden; transition: 0.3s; z-index: 200; }
+        .completion-page.active { opacity: 1; visibility: visible; }
+        .completion-card { background: var(--bg-card); border-radius: 2rem; padding: 2rem; text-align: center; position: relative; max-width: 500px; }
+        .close-completion { position: absolute; top: 1rem; right: 1.5rem; font-size: 1.6rem; cursor: pointer; background: none; border: none; }
+        .season-flora { font-size: 3rem; display: flex; gap: 1rem; justify-content: center; margin: 1rem 0; }
+        @media (max-width: 680px) { .form-grid { grid-template-columns: 1fr; } .full-width { grid-column: span 1; } }
+    </style>
+</head>
+<body data-theme="light" class="spring">
+    <div class="plant-decor" id="plantDecor"></div>
+    <div class="corner-leaf corner-leaf-left">🍃</div>
+    <div class="corner-leaf">🌿</div>
+    <div class="container" id="mainContainer">
+        <div class="header">
+            <div class="logo"><h1>🍃 四季邮局 · 投递站</h1><p>写一封信，寄往四季</p></div>
+            <div class="controls">
+                <div class="season-group" id="seasonGroup">
+                    <button data-season="spring" class="season-btn active"><i class="fas fa-seedling"></i> 春</button>
+                    <button data-season="summer" class="season-btn"><i class="fas fa-sun"></i> 夏</button>
+                    <button data-season="autumn" class="season-btn"><i class="fas fa-leaf"></i> 秋</button>
+                    <button data-season="winter" class="season-btn"><i class="fas fa-snowflake"></i> 冬</button>
+                </div>
+                <div class="theme-group" id="themeGroup">
+                    <button data-theme="light" class="theme-btn active"><i class="fas fa-sun"></i> 白昼</button>
+                    <button data-theme="dark" class="theme-btn"><i class="fas fa-moon"></i> 夜幕</button>
+                </div>
+            </div>
+        </div>
+        <div id="dynamicContent"></div>
+        <div class="message-board" id="messageBoard" style="display: none;">
+            <div class="message-text" id="sloganText">“把心事装进信封，让四季的风为你传递。总有一个季节，会读懂你的温柔。”<br>—— 四季邮局</div>
+        </div>
+    </div>
+    <div class="completion-page" id="completionPage">
+        <div class="completion-card">
+            <button class="close-completion" id="closeCompletionBtn"><i class="fas fa-times"></i></button>
+            <div class="season-flora" id="seasonFloraContainer"></div>
+            <div class="warm-message" id="warmMessageTitle" style="font-size:1.4rem; margin:1rem 0;">🌱 信已寄出 🌱</div>
+            <div id="waitingText">风会带回温暖的回音，请耐心等待。</div>
+        </div>
+    </div>
+    <script>
+        // ========== 请替换成你自己的 Supabase 配置 ==========
+        const SUPABASE_URL = 'https://sgvgfquwqofnmhfvmgzo.supabase.co';   
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNndmdmcXV3cW9mbm1oZnZtZ3pvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNTI3MzMsImV4cCI6MjA5NDgyODczM30.PnmLtxKnCvm90MP3Jp4FCUCWMGzP9Ivqm6WKZBbJ6M8';
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // 随机寄语库
+        const SLOGANS = [
+            "“把心事装进信封，让四季的风为你传递。总有一个季节，会读懂你的温柔。”",
+            "“写信的时候，窗外的花正在开。你的思念，会随着信笺抵达另一片春天。”",
+            "“每一封信都是一粒种子，落在谁的心田，就会长出怎样的故事。”",
+            "“夏日的蝉鸣是信差，把漫长的白日梦带向远方。”",
+            "“秋叶会泛黄，但墨迹永不褪色。你写下的，时光都会记得。”",
+            "“冬雪覆盖喧嚣，书信是寂静里最温柔的声响。”",
+            "“邮局不打烊，四季都是投递的季节。你的心事，总有人会听。”",
+            "“信是慢下来的浪漫，车马很远，但心意很近。”",
+            "“在这个世界上，总有人在等待一封信，也总有一封信在等待你。”",
+            "“笔尖触碰纸张的瞬间，就是四季轮转中最美的定格。”"
+        ];
+
+        function updateRandomSlogan() {
+            const sloganDiv = document.getElementById('sloganText');
+            if (!sloganDiv) return;
+            const idx = Math.floor(Math.random() * SLOGANS.length);
+            let slogan = SLOGANS[idx];
+            if (!slogan.includes('—— 四季邮局')) slogan += '<br>—— 四季邮局';
+            sloganDiv.innerHTML = slogan;
+        }
+
+        let currentActiveApp = null;
+        let currentSeason = 'spring';
+
+        async function fetchActiveApplication() {
+            const { data, error } = await supabase.from('applications').select('*').eq('status', 'approved').lt('usedCount', 3).maybeSingle();
+            if (error) { console.error(error); return null; }
+            return data;
+        }
+
+        async function submitApplication(name, birthday) {
+            const { error } = await supabase.from('applications').insert({ id: Date.now(), name: name.trim(), birthday: birthday.trim(), status: 'pending', usedCount: 0 });
+            if (error) { alert("提交失败: " + error.message); return false; }
+            return true;
+        }
+
+        async function incrementUsedCount(appId) {
+            const { data: app } = await supabase.from('applications').select('usedCount').eq('id', appId).single();
+            if (!app) return false;
+            const newCount = app.usedCount + 1;
+            const newStatus = newCount >= 3 ? 'expired' : 'approved';
+            const { error } = await supabase.from('applications').update({ usedCount: newCount, status: newStatus }).eq('id', appId);
+            if (error) return false;
+            return true;
+        }
+
+        async function addLetter(sender, receiver, subject, content) {
+            if (!subject.trim() || !content.trim()) return false;
+            const { error } = await supabase.from('letters').insert({
+                id: Date.now(),
+                sender: sender.trim() || "匿名寄信人",
+                receiver: receiver.trim() || "时光旅人",
+                subject: subject.trim(),
+                content: content.trim(),
+                timestamp: new Date().toLocaleString('zh-CN'),
+                read: false,
+                season: currentSeason
+            });
+            if (error) { alert("发送失败: " + error.message); return false; }
+            return true;
+        }
+
+        async function hasPendingApplication() {
+            const { data } = await supabase.from('applications').select('id').eq('status', 'pending').limit(1);
+            return data && data.length > 0;
+        }
+
+        async function refreshUI() {
+            const container = document.getElementById('dynamicContent');
+            const messageBoard = document.getElementById('messageBoard');
+            const activeApp = await fetchActiveApplication();
+            currentActiveApp = activeApp;
+            if (!activeApp) {
+                if (await hasPendingApplication()) {
+                    container.innerHTML = `<div class="pending-msg"><i class="fas fa-hourglass-half" style="font-size:3rem;"></i><h3>等待审核中...</h3><p>您的申请已提交，管理员正在审核。请稍后再来。</p></div>`;
+                    messageBoard.style.display = 'none';
+                } else {
+                    container.innerHTML = `<div class="apply-form"><h3><i class="fas fa-key"></i> 申请投递权限</h3><p>请填写资料，等待管理员审核通过后即可写信（每人最多投递3封信）</p><input type="text" id="applyName" placeholder="姓名"><input type="text" id="applyBirthday" placeholder="生日 (YYYY-MM-DD)"><button id="submitApplyBtn">提交申请</button></div>`;
+                    messageBoard.style.display = 'none';
+                    document.getElementById('submitApplyBtn')?.addEventListener('click', async () => {
+                        const name = document.getElementById('applyName').value;
+                        const birthday = document.getElementById('applyBirthday').value;
+                        if (!name.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(birthday)) { alert("请填写完整信息，生日格式 YYYY-MM-DD"); return; }
+                        if (await submitApplication(name, birthday)) await refreshUI();
+                    });
+                }
+                return;
+            }
+            const remain = 3 - (activeApp.usedCount || 0);
+            container.innerHTML = `<div class="write-area"><div><i class="fas fa-feather-alt"></i> 撰写新信</div><div class="form-grid"><input type="text" id="senderName" placeholder="📝 署名 / 寄信人"><input type="text" id="receiverName" placeholder="🍂 致 · 收信人 (可选)"><div class="full-width"><input type="text" id="letterSubject" placeholder="✉️ 信件主题"></div><div class="full-width"><textarea id="letterContent" rows="4" placeholder="将你的思绪写入信纸..."></textarea></div></div><button class="btn-send" id="sendLetterBtn">投递信件</button><div class="remain-count">✉️ 剩余投递次数：${remain} / 3</div></div>`;
+            messageBoard.style.display = 'block';
+            updateRandomSlogan();
+            document.getElementById('sendLetterBtn')?.addEventListener('click', async () => {
+                const sender = document.getElementById('senderName').value;
+                const receiver = document.getElementById('receiverName').value;
+                const subject = document.getElementById('letterSubject').value;
+                const content = document.getElementById('letterContent').value;
+                if (!subject.trim() || !content.trim()) { alert("请填写主题和内容"); return; }
+                if (await addLetter(sender, receiver, subject, content)) {
+                    await incrementUsedCount(currentActiveApp.id);
+                    document.getElementById('senderName').value = '';
+                    document.getElementById('receiverName').value = '';
+                    document.getElementById('letterSubject').value = '';
+                    document.getElementById('letterContent').value = '';
+                    showCompletionPage(currentSeason);
+                    document.getElementById('mainContainer').style.display = 'none';
+                    await refreshUI();
+                }
+            });
+        }
+
+        function showCompletionPage(season) {
+            const flora = { spring:['🌸','🌼','🌱'], summer:['🌻','🌿','🍉'], autumn:['🍂','🍁','🌾'], winter:['❄️','🌲','☃️'] }[season];
+            document.getElementById('seasonFloraContainer').innerHTML = flora.map(f=>`<span style="font-size:2rem">${f}</span>`).join('');
+            const texts = { spring:['🌸 春信已寄，静候佳音 🌸','你的信件乘着春风，穿越花海而去。'], summer:['🌞 夏日蝉鸣，回信在途 🌞','明亮的夏夜里，每一颗星星都是未拆的信笺。'], autumn:['🍁 秋叶为信，思念已递 🍁','金黄的银杏铺成小径，等待的日子里愿你手捧暖茶。'], winter:['❄️ 冬雪寄意，静待春信 ❄️','雪花覆盖喧嚣，回信将在第一缕春风时抵达。'] };
+            document.getElementById('warmMessageTitle').innerHTML = texts[season][0];
+            document.getElementById('waitingText').innerHTML = texts[season][1];
+            document.getElementById('completionPage').classList.add('active');
+        }
+        function hideCompletionPage() {
+            document.getElementById('mainContainer').style.display = 'block';
+            document.getElementById('completionPage').classList.remove('active');
+            refreshUI();
+        }
+
+        function generateFloatingPlants(season) {
+            const container = document.getElementById('plantDecor');
+            if (!container) return;
+            container.innerHTML = '';
+            const icons = { spring:['🌸','🌼','🌱'], summer:['🌻','🌿','🍉'], autumn:['🍂','🍁','🌾'], winter:['❄️','🌲','☃️'] }[season] || ['🌸'];
+            for (let i=0;i<24;i++) {
+                const p = document.createElement('div');
+                p.className = 'floating-plant';
+                p.innerHTML = icons[Math.floor(Math.random() * icons.length)];
+                p.style.fontSize = (20 + Math.random() * 28) + 'px';
+                p.style.left = Math.random() * 95 + '%';
+                p.style.top = Math.random() * 90 + '%';
+                p.style.animationDuration = (12 + Math.random() * 12) + 's';
+                container.appendChild(p);
+            }
+        }
+        function setSeason(season) {
+            currentSeason = season;
+            document.body.classList.remove('spring','summer','autumn','winter');
+            document.body.classList.add(season);
+            generateFloatingPlants(season);
+            document.querySelectorAll('.season-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.season === season));
+            const msgBoard = document.getElementById('messageBoard');
+            if (msgBoard && msgBoard.style.display === 'block') updateRandomSlogan();
+        }
+        function setTheme(theme) {
+            document.body.setAttribute('data-theme', theme);
+            document.querySelectorAll('.theme-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.theme === theme));
+        }
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            setSeason('spring');
+            setTheme('light');
+            await refreshUI();
+            supabase.channel('public-applications').on('postgres_changes', { event: '*', schema: 'public', table: 'applications' }, () => refreshUI()).subscribe();
+            document.getElementById('closeCompletionBtn')?.addEventListener('click', hideCompletionPage);
+            document.getElementById('completionPage')?.addEventListener('click', (e) => { if (e.target === document.getElementById('completionPage')) hideCompletionPage(); });
+            document.querySelectorAll('.season-btn').forEach(btn => btn.addEventListener('click', () => setSeason(btn.dataset.season)));
+            document.querySelectorAll('.theme-btn').forEach(btn => btn.addEventListener('click', () => setTheme(btn.dataset.theme)));
+        });
+    </script>
+</body>
+</html>
