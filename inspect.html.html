@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>四季邮局 · 查阅站</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;400;500;600;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        * { margin:0; padding:0; box-sizing: border-box; transition: background-color 0.3s ease, color 0.2s ease; }
+        body { font-family: 'Inter', sans-serif; min-height: 100vh; padding: 2rem 1.5rem; position: relative; line-height: 1.5; }
+        body[data-theme="light"] { --bg-primary: #fefcf5; --bg-card: rgba(255,255,245,0.92); --text-primary: #1e2a2e; --border-light: #dcd7c2; --accent-soft: #9bbf8f; --shadow: 0 12px 28px rgba(0,0,0,0.05); --read-bg: #e9f5e6; --search-bg: #ffffffcc; }
+        body[data-theme="dark"] { --bg-primary: #121212; --bg-card: rgba(30,30,35,0.92); --text-primary: #ece7e1; --border-light: #3a4235; --accent-soft: #6c9e6b; --shadow: 0 12px 28px rgba(0,0,0,0.4); --read-bg: #2a3a2a; --search-bg: #2a2a2acc; }
+        body { background-color: var(--bg-primary); color: var(--text-primary); }
+        .container { max-width: 1280px; margin: 0 auto; position: relative; z-index: 5; }
+        .header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; margin-bottom: 2rem; border-bottom: 2px solid var(--border-light); padding-bottom: 1rem; }
+        .logo h1 { font-family: 'Cormorant Garamond', serif; font-size: 2rem; background: linear-gradient(135deg, var(--accent-soft), #8fbc8f); background-clip: text; -webkit-background-clip: text; color: transparent; }
+        .controls { display: flex; gap: 1rem; }
+        .season-group, .theme-group { display: flex; gap: 0.5rem; background: var(--bg-card); padding: 0.3rem 0.7rem; border-radius: 60px; border: 1px solid var(--border-light); }
+        .season-btn, .theme-btn { background: none; border: none; font-size: 1.1rem; cursor: pointer; padding: 0.3rem 0.8rem; border-radius: 40px; color: var(--text-primary); }
+        .season-btn.active, .theme-btn.active { background-color: var(--accent-soft); color: #1e2a1f; }
+        .admin-panel { background: var(--bg-card); border-radius: 1.5rem; padding: 1.2rem 1.5rem; margin-bottom: 2rem; border: 1px solid var(--border-light); }
+        .admin-panel h3 { margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem; }
+        .application-item { background: var(--bg-primary); border-radius: 1rem; padding: 0.8rem 1rem; margin-bottom: 0.8rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.8rem; }
+        .app-info { font-size: 0.9rem; }
+        .app-status { font-size: 0.75rem; margin-left: 0.5rem; padding: 0.2rem 0.5rem; border-radius: 20px; display: inline-block; }
+        .status-pending { background: #f0ad4e; color: #fff; }
+        .status-approved { background: #5cb85c; color: #fff; }
+        .status-rejected { background: #d9534f; color: #fff; }
+        .status-expired { background: #777; color: #fff; }
+        .app-actions button { background: none; border: none; padding: 0.4rem 1rem; border-radius: 2rem; cursor: pointer; margin-left: 0.5rem; }
+        .btn-approve { background-color: #5cb85c; color: white; }
+        .btn-reject { background-color: #d9534f; color: white; }
+        .btn-delete-app { background-color: #777; color: white; }
+        .empty-app { text-align: center; padding: 1rem; opacity: 0.7; font-style: italic; }
+        .search-bar { margin-bottom: 1.5rem; display: flex; justify-content: center; }
+        .search-input-wrapper { position: relative; width: 100%; max-width: 500px; }
+        .search-input { width: 100%; padding: 0.9rem 1rem 0.9rem 3rem; background: var(--search-bg); backdrop-filter: blur(4px); border: 1px solid var(--border-light); border-radius: 3rem; font-family: 'Inter', sans-serif; font-size: 0.9rem; color: var(--text-primary); outline: none; }
+        .search-input:focus { border-color: var(--accent-soft); box-shadow: 0 0 0 2px rgba(108,158,107,0.2); }
+        .search-icon { position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--accent-soft); }
+        .search-clear { position: absolute; right: 1rem; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-primary); opacity: 0.5; cursor: pointer; }
+        .search-info { font-size: 0.8rem; text-align: center; margin-top: 0.5rem; opacity: 0.7; }
+        .letters-list { display: flex; flex-direction: column; gap: 1.2rem; }
+        .letter-card { background: var(--bg-card); border-radius: 1.5rem; border-left: 6px solid var(--accent-soft); padding: 1.2rem 1.5rem; box-shadow: var(--shadow); transition: 0.2s; }
+        .letter-card.read { border-left-color: #b0c4b0; opacity: 0.85; background: var(--read-bg); }
+        .letter-header { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; margin-bottom: 0.5rem; }
+        .letter-subject { font-size: 1.2rem; font-weight: 700; display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; }
+        .read-badge { font-size: 0.7rem; background: var(--accent-soft); padding: 0.2rem 0.6rem; border-radius: 30px; color: #1e2a1f; }
+        .season-badge { font-size: 0.75rem; background: rgba(0,0,0,0.1); padding: 0.2rem 0.6rem; border-radius: 30px; display: inline-flex; align-items: center; gap: 0.3rem; }
+        .letter-meta { font-size: 0.75rem; display: flex; gap: 1rem; margin: 0.5rem 0; opacity: 0.7; flex-wrap: wrap; }
+        .letter-content-preview { font-size: 0.9rem; margin: 0.6rem 0; line-height: 1.4; cursor: pointer; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .letter-content-full { display: none; margin-top: 0.8rem; padding-top: 0.8rem; border-top: 1px dashed var(--border-light); white-space: pre-wrap; line-height: 1.6; }
+        .letter-content-full.show { display: block; }
+        .card-actions { display: flex; justify-content: flex-end; gap: 1rem; margin-top: 0.8rem; }
+        .btn-mark-read, .btn-toggle, .btn-delete { background: none; border: none; font-size: 0.8rem; cursor: pointer; padding: 0.3rem 0.8rem; border-radius: 2rem; transition: 0.2s; }
+        .btn-mark-read, .btn-toggle { color: var(--accent-soft); }
+        .btn-mark-read:hover, .btn-toggle:hover { background: var(--accent-soft); color: #1e2a1f; }
+        .btn-delete { color: #d9534f; }
+        .btn-delete:hover { background: #d9534f; color: white; }
+        .empty-msg { text-align: center; padding: 3rem; font-style: italic; opacity: 0.7; }
+        .plant-decor { position: fixed; inset: 0; pointer-events: none; z-index: 1; overflow: hidden; }
+        .floating-plant { position: absolute; animation: floatAnim 16s infinite alternate; opacity: 0.3; }
+        @keyframes floatAnim { 0% { transform: translateY(0); } 100% { transform: translateY(-28px); } }
+        .corner-leaf { position: fixed; bottom: 20px; right: 15px; font-size: 3rem; opacity: 0.35; pointer-events: none; z-index: 2; }
+        .corner-leaf-left { left: 15px; right: auto; }
+        @media (max-width: 680px) { .letter-header { flex-direction: column; } .letter-subject { font-size: 1rem; } }
+    </style>
+</head>
+<body data-theme="light" class="spring">
+    <div class="plant-decor" id="plantDecor"></div>
+    <div class="corner-leaf corner-leaf-left">🍃</div>
+    <div class="corner-leaf">🌿</div>
+    <div class="container">
+        <div class="header">
+            <div class="logo"><h1>📖 四季邮局 · 查阅站</h1><p>管理申请 · 查阅信件</p></div>
+            <div class="controls">
+                <div class="season-group" id="seasonGroup">
+                    <button data-season="spring" class="season-btn active"><i class="fas fa-seedling"></i> 春</button>
+                    <button data-season="summer" class="season-btn"><i class="fas fa-sun"></i> 夏</button>
+                    <button data-season="autumn" class="season-btn"><i class="fas fa-leaf"></i> 秋</button>
+                    <button data-season="winter" class="season-btn"><i class="fas fa-snowflake"></i> 冬</button>
+                </div>
+                <div class="theme-group" id="themeGroup">
+                    <button data-theme="light" class="theme-btn active"><i class="fas fa-sun"></i> 白昼</button>
+                    <button data-theme="dark" class="theme-btn"><i class="fas fa-moon"></i> 夜幕</button>
+                </div>
+            </div>
+        </div>
+        <div id="adminPanel" class="admin-panel"></div>
+        <div class="search-bar">
+            <div class="search-input-wrapper">
+                <i class="fas fa-search search-icon"></i>
+                <input type="text" id="searchInput" class="search-input" placeholder="搜索信件...">
+                <button id="searchClearBtn" class="search-clear"><i class="fas fa-times-circle"></i></button>
+            </div>
+        </div>
+        <div id="searchInfo" class="search-info"></div>
+        <div id="lettersContainer" class="letters-list"></div>
+    </div>
+    <script>
+        // ========== 请替换成你自己的 Supabase 配置 ==========
+        const SUPABASE_URL = 'https://sgvgfquwqofnmhfvmgzo.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNndmdmcXV3cW9mbm1oZnZtZ3pvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkyNTI3MzMsImV4cCI6MjA5NDgyODczM30.PnmLtxKnCvm90MP3Jp4FCUCWMGzP9Ivqm6WKZBbJ6M8';
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let applications = [], letters = [], currentSearchKeyword = '';
+
+        async function loadApplications() { const { data } = await supabase.from('applications').select('*').order('created_at', { ascending: false }); return data || []; }
+        async function loadLetters() { const { data } = await supabase.from('letters').select('*').order('created_at', { ascending: false }); return data || []; }
+        async function refreshData() { applications = await loadApplications(); letters = await loadLetters(); renderAdminPanel(); renderLetters(); }
+
+        async function approveApplication(id) { await supabase.from('applications').update({ status: 'approved' }).eq('id', id); refreshData(); }
+        async function rejectApplication(id) { await supabase.from('applications').update({ status: 'rejected' }).eq('id', id); refreshData(); }
+        async function deleteApplication(id) { if (confirm('删除申请记录？')) { await supabase.from('applications').delete().eq('id', id); refreshData(); } }
+        async function deleteLetter(id) { if (confirm('删除这封信？')) { await supabase.from('letters').delete().eq('id', id); refreshData(); } }
+        async function markAsRead(id) { await supabase.from('letters').update({ read: true }).eq('id', id); refreshData(); }
+
+        function getSeasonIcon(season) { const m = { spring:'🌸 春季', summer:'🌻 夏季', autumn:'🍂 秋季', winter:'❄️ 冬季' }; return m[season] || '🍃 未知季节'; }
+        function escapeHtml(str) { if (!str) return ''; return str.replace(/[&<>]/g, m => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' })[m]); }
+        function getStatusText(status) { const m = { pending:'待审批', approved:'已批准', rejected:'已拒绝', expired:'已用完' }; return m[status] || status; }
+
+        function renderAdminPanel() {
+            const panel = document.getElementById('adminPanel');
+            if (!panel) return;
+            if (!applications.length) { panel.innerHTML = '<div class="empty-app">📋 暂无申请记录</div>'; return; }
+            let html = '<h3><i class="fas fa-users"></i> 投递权限申请列表</h3>';
+            applications.forEach(app => {
+                let actions = '';
+                if (app.status === 'pending') actions = `<button class="btn-approve" data-id="${app.id}">同意</button><button class="btn-reject" data-id="${app.id}">拒绝</button>`;
+                actions += `<button class="btn-delete-app" data-id="${app.id}">删除</button>`;
+                html += `<div class="application-item"><div class="app-info"><strong>${escapeHtml(app.name)}</strong> (${escapeHtml(app.birthday)})<br>状态：<span class="app-status status-${app.status}">${getStatusText(app.status)}</span> ${app.status === 'approved' ? `| 已投递：${app.usedCount || 0}/3` : ''}<br><small>申请时间：${new Date(app.created_at).toLocaleString()}</small></div><div class="app-actions">${actions}</div></div>`;
+            });
+            panel.innerHTML = html;
+            document.querySelectorAll('.btn-approve').forEach(btn => btn.addEventListener('click', () => approveApplication(parseInt(btn.dataset.id))));
+            document.querySelectorAll('.btn-reject').forEach(btn => btn.addEventListener('click', () => rejectApplication(parseInt(btn.dataset.id))));
+            document.querySelectorAll('.btn-delete-app').forEach(btn => btn.addEventListener('click', () => deleteApplication(parseInt(btn.dataset.id))));
+        }
+
+        function renderLetters() {
+            let filtered = letters.filter(l => l.subject.includes(currentSearchKeyword) || l.content.includes(currentSearchKeyword) || l.sender.includes(currentSearchKeyword));
+            const container = document.getElementById('lettersContainer');
+            const info = document.getElementById('searchInfo');
+            info.innerHTML = currentSearchKeyword.trim() ? `找到 ${filtered.length} 封相关信件 (共 ${letters.length} 封)` : `共 ${letters.length} 封信件`;
+            if (!filtered.length) { container.innerHTML = '<div class="empty-msg">📭 没有找到相关信件。</div>'; return; }
+            container.innerHTML = filtered.map(l => `
+                <div class="letter-card ${l.read ? 'read' : ''}">
+                    <div class="letter-header"><div class="letter-subject">📮 ${escapeHtml(l.subject)} ${l.read ? '<span class="read-badge">✅已阅</span>' : '<span class="read-badge" style="background:#d9c8a9;">未阅</span>'} <span class="season-badge"><i class="fas fa-leaf"></i> ${getSeasonIcon(l.season)}</span></div></div>
+                    <div class="letter-meta"><span><i class="fas fa-pen-fancy"></i> ${escapeHtml(l.sender)}</span><span><i class="fas fa-envelope"></i> 致 ${escapeHtml(l.receiver)}</span><span><i class="far fa-calendar-alt"></i> ${escapeHtml(l.timestamp)}</span></div>
+                    <div class="letter-content-preview" data-id="${l.id}">${escapeHtml(l.content.substring(0,80))}...</div>
+                    <div class="letter-content-full" id="full-${l.id}">${escapeHtml(l.content).replace(/\n/g,'<br>')}</div>
+                    <div class="card-actions">${!l.read ? `<button class="btn-mark-read" data-id="${l.id}">标记已阅</button>` : ''}<button class="btn-toggle" data-id="${l.id}">展开全文</button><button class="btn-delete" data-id="${l.id}">删除</button></div>
+                </div>
+            `).join('');
+            document.querySelectorAll('.btn-mark-read').forEach(btn => btn.addEventListener('click', () => markAsRead(parseInt(btn.dataset.id))));
+            document.querySelectorAll('.btn-delete').forEach(btn => btn.addEventListener('click', () => deleteLetter(parseInt(btn.dataset.id))));
+            document.querySelectorAll('.btn-toggle').forEach(btn => btn.addEventListener('click', () => document.getElementById(`full-${btn.dataset.id}`).classList.toggle('show')));
+            document.querySelectorAll('.letter-content-preview').forEach(pre => pre.addEventListener('click', () => document.getElementById(`full-${pre.dataset.id}`)?.classList.toggle('show')));
+        }
+
+        function generateFloatingPlants(season) {
+            const container = document.getElementById('plantDecor'); if (!container) return;
+            container.innerHTML = '';
+            const icons = { spring:['🌸','🌼','🌱'], summer:['🌻','🌿','🍉'], autumn:['🍂','🍁','🌾'], winter:['❄️','🌲','☃️'] }[season] || ['🌸'];
+            for (let i=0;i<20;i++) { const p = document.createElement('div'); p.className = 'floating-plant'; p.innerHTML = icons[Math.floor(Math.random() * icons.length)]; p.style.fontSize = (18+Math.random()*26)+'px'; p.style.left = Math.random()*95+'%'; p.style.top = Math.random()*90+'%'; p.style.animationDuration = (12+Math.random()*12)+'s'; container.appendChild(p); }
+        }
+        function setSeason(season) { document.body.classList.remove('spring','summer','autumn','winter'); document.body.classList.add(season); generateFloatingPlants(season); document.querySelectorAll('.season-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.season === season)); }
+        function setTheme(theme) { document.body.setAttribute('data-theme', theme); document.querySelectorAll('.theme-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.theme === theme)); }
+
+        document.getElementById('searchInput').addEventListener('input', e => { currentSearchKeyword = e.target.value; renderLetters(); });
+        document.getElementById('searchClearBtn').addEventListener('click', () => { document.getElementById('searchInput').value = ''; currentSearchKeyword = ''; renderLetters(); });
+        window.addEventListener('DOMContentLoaded', async () => {
+            await refreshData();
+            setSeason('spring'); setTheme('light');
+            supabase.channel('public-changes').on('postgres_changes', { event: '*', schema: 'public', table: 'applications' }, () => refreshData()).on('postgres_changes', { event: '*', schema: 'public', table: 'letters' }, () => refreshData()).subscribe();
+            document.querySelectorAll('.season-btn').forEach(btn => btn.addEventListener('click', () => setSeason(btn.dataset.season)));
+            document.querySelectorAll('.theme-btn').forEach(btn => btn.addEventListener('click', () => setTheme(btn.dataset.theme)));
+        });
+    </script>
+</body>
+</html>
